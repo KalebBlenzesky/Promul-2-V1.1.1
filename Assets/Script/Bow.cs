@@ -5,13 +5,19 @@ using System.Collections.Generic;
 using TMPro;
 using System.Globalization;
 
-public class Voice : MonoBehaviour
+public class Bow : MonoBehaviour
 {
-    [Header ("Object")]
+    [Header("Object")]
     public GameObject targetObject;
+    public LineRenderer stringbow;
     private KeywordRecognizer keywordRecognizer;
 
-    [Header ("Command Right and Left")]
+    private Vector3 currentMiddlePos;
+    private Vector3 targetMiddlePos;
+    public float pullSpeed = 5f;
+
+
+    [Header("Command Right and Left")]
     [SerializeField]
     private List<VoiceRightLeft> RightLeft = new List<VoiceRightLeft>();
     private Dictionary<string, int> rightLeftMappings = new Dictionary<string, int>();
@@ -20,6 +26,15 @@ public class Voice : MonoBehaviour
     [SerializeField]
     private List<VoiceUpDown> UpDown = new List<VoiceUpDown>();
     private Dictionary<string, int> upDownMappings = new Dictionary<string, int>();
+
+    [Header("Command Reay and Fire")]
+    [SerializeField]
+    private List<Ready> ReadyCommand = new List<Ready>();
+    private Dictionary<string, int> readyMappings = new Dictionary<string, int>();
+
+    [SerializeField]
+    private List<Ready> FireCommand = new List<Ready>();
+    private Dictionary<string, int> fireMappings = new Dictionary<string, int>();
 
     private string[] resetwords = { "reset", "restart" };
 
@@ -49,7 +64,11 @@ public class Voice : MonoBehaviour
         Subtitles.text = "";
         PopulateDropdown();
         InitializeVoiceRecognition();
+
+        currentMiddlePos = stringbow.GetPosition(2);
+        targetMiddlePos = stringbow.GetPosition(1);
     }
+
 
     void PopulateDropdown()
     {
@@ -117,6 +136,15 @@ public class Voice : MonoBehaviour
         targetRotation = targetObject.transform.rotation;
     }
 
+    void UpdateStringBow()
+    {
+        if (stringbow != null)
+        {
+            stringbow.positionCount = 3;
+            stringbow.SetPosition(1, currentMiddlePos);
+        }
+    }
+
     private void OnKeywordRecognized(PhraseRecognizedEventArgs args)
     {
         Say = args.text;
@@ -154,11 +182,16 @@ public class Voice : MonoBehaviour
     {
         targetObject.transform.rotation = Quaternion.Lerp(targetObject.transform.rotation, targetRotation, Time.deltaTime * rotationSpeed);
 
+        // Update posisi tengah tali
+        currentMiddlePos = Vector3.Lerp(currentMiddlePos, targetMiddlePos, Time.deltaTime * pullSpeed);
+        UpdateStringBow();
+
         if (Time.time - lastVoiceTime > 3f && !isFading)
         {
             StartCoroutine(FadeOutSubtitles());
         }
     }
+
 
     void OnDestroy()
     {
