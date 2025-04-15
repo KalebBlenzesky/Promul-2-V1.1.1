@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using TMPro;
 using System.Globalization;
+using Unity.IO.LowLevel.Unsafe;
 
 public class Bow : MonoBehaviour
 {
@@ -16,6 +17,9 @@ public class Bow : MonoBehaviour
     private Vector3 targetMiddlePos;
     public float pullSpeed = 5f;
 
+    private Vector3 defaultMiddlePos;
+    private Vector3 pulledMiddlePos;
+    private bool isPulling = false;
 
     [Header("Command Right and Left")]
     [SerializeField]
@@ -27,14 +31,14 @@ public class Bow : MonoBehaviour
     private List<VoiceUpDown> UpDown = new List<VoiceUpDown>();
     private Dictionary<string, int> upDownMappings = new Dictionary<string, int>();
 
-    [Header("Command Reay and Fire")]
+    [Header("Command Ready and Fire")]
     [SerializeField]
     private List<Ready> ReadyCommand = new List<Ready>();
-    private Dictionary<string, int> readyMappings = new Dictionary<string, int>();
+    private HashSet<string> readyCommands = new HashSet<string>();
 
     [SerializeField]
-    private List<Ready> FireCommand = new List<Ready>();
-    private Dictionary<string, int> fireMappings = new Dictionary<string, int>();
+    private List<Fire> FireCommand = new List<Fire>();
+    private HashSet<string> fireCommands = new HashSet<string>();
 
     private string[] resetwords = { "reset", "restart" };
 
@@ -65,8 +69,14 @@ public class Bow : MonoBehaviour
         PopulateDropdown();
         InitializeVoiceRecognition();
 
-        currentMiddlePos = stringbow.GetPosition(2);
-        targetMiddlePos = stringbow.GetPosition(1);
+        if (stringbow != null && stringbow.positionCount >= 3)
+        {
+            defaultMiddlePos = stringbow.GetPosition(1);
+            pulledMiddlePos = new Vector3(1f, defaultMiddlePos.y, defaultMiddlePos.z);
+            currentMiddlePos = defaultMiddlePos;
+        }
+
+        targetRotation = targetObject.transform.rotation;
     }
 
 
@@ -117,6 +127,19 @@ public class Bow : MonoBehaviour
         {
             wordBad.Add(badWord.bad);
         }
+
+        readyCommands.Clear();
+        foreach (var r in ReadyCommand)
+        {
+            readyCommands.Add(r.command.ToLowerInvariant());
+        }
+
+        fireCommands.Clear();
+        foreach (var f in FireCommand)
+        {
+            fireCommands.Add(f.command.ToLowerInvariant());
+        }
+
 
         List<string> allKeywords = new List<string>(rightLeftMappings.Keys);
         allKeywords.AddRange(upDownMappings.Keys);
@@ -172,6 +195,16 @@ public class Bow : MonoBehaviour
             targetRotation = Quaternion.identity;
             ShowSubtitles(Say);
         }
+        else if (readyCommands.Contains(Say))
+        {
+            isPulling = true;
+            ShowSubtitles(Say);
+        }
+        else if (fireCommands.Contains(Say))
+        {
+            isPulling = false;
+            ShowSubtitles(Say);
+        }
         else
         {
             ShowSubtitles("Sorry, I Don't Understand, Please Try Again");
@@ -182,7 +215,9 @@ public class Bow : MonoBehaviour
     {
         targetObject.transform.rotation = Quaternion.Lerp(targetObject.transform.rotation, targetRotation, Time.deltaTime * rotationSpeed);
 
-        // Update posisi tengah tali
+        // Pilih target posisi berdasarkan status tarik
+        targetMiddlePos = isPulling ? pulledMiddlePos : defaultMiddlePos;
+
         currentMiddlePos = Vector3.Lerp(currentMiddlePos, targetMiddlePos, Time.deltaTime * pullSpeed);
         UpdateStringBow();
 
