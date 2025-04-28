@@ -1,9 +1,10 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.Windows.Speech;
 using System;
 using System.Collections.Generic;
 using TMPro;
 using System.Globalization;
+using Unity.IO.LowLevel.Unsafe;
 
 public class Bow : MonoBehaviour
 {
@@ -16,6 +17,26 @@ public class Bow : MonoBehaviour
     private Vector3 targetMiddlePos;
     public float pullSpeed = 5f;
 
+    private Vector3 defaultMiddlePos;
+    private Vector3 pulledMiddlePos;
+    private bool isPulling = false;
+
+    [Header("Bow")]
+    public GameObject arrowPrefabs;
+    public Transform point;
+    private GameObject currentArrow;
+    private Vector3 pointDefaultPos;
+    private Vector3 pointPulledPos;
+    public float pointPullSpeed = 3f;
+    public float maxPullDistance = 1f;
+
+    [Header("Trajectory")]
+    public LineRenderer trajectoryLine;
+    public int trajectoryResolution = 30;
+    public float forceMultiplier = 10f;
+    private float currentForce = 0f;
+    private float targetForce = 0f;
+    public float forceLerpSpeed = 5f;
 
     [Header("Command Right and Left")]
     [SerializeField]
@@ -27,14 +48,14 @@ public class Bow : MonoBehaviour
     private List<VoiceUpDown> UpDown = new List<VoiceUpDown>();
     private Dictionary<string, int> upDownMappings = new Dictionary<string, int>();
 
-    [Header("Command Reay and Fire")]
+    [Header("Command Ready and Fire")]
     [SerializeField]
     private List<Ready> ReadyCommand = new List<Ready>();
-    private Dictionary<string, int> readyMappings = new Dictionary<string, int>();
+    private HashSet<string> readyCommands = new HashSet<string>();
 
     [SerializeField]
-    private List<Ready> FireCommand = new List<Ready>();
-    private Dictionary<string, int> fireMappings = new Dictionary<string, int>();
+    private List<Fire> FireCommand = new List<Fire>();
+    private HashSet<string> fireCommands = new HashSet<string>();
 
     private string[] resetwords = { "reset", "restart" };
 
@@ -65,8 +86,16 @@ public class Bow : MonoBehaviour
         PopulateDropdown();
         InitializeVoiceRecognition();
 
-        currentMiddlePos = stringbow.GetPosition(2);
-        targetMiddlePos = stringbow.GetPosition(1);
+        if (stringbow != null && stringbow.positionCount >= 3)
+        {
+            defaultMiddlePos = stringbow.GetPosition(1);
+            pulledMiddlePos = new Vector3(1f, defaultMiddlePos.y, defaultMiddlePos.z);
+            currentMiddlePos = defaultMiddlePos;
+        }
+
+        targetRotation = targetObject.transform.rotation;
+        pointDefaultPos = point.localPosition;
+        pointPulledPos = new Vector3(point.localPosition.x, point.localPosition.y, -1f);
     }
 
 
@@ -118,10 +147,25 @@ public class Bow : MonoBehaviour
             wordBad.Add(badWord.bad);
         }
 
+        readyCommands.Clear();
+        foreach (var r in ReadyCommand)
+        {
+            readyCommands.Add(r.command);
+        }
+
+        fireCommands.Clear();
+        foreach (var f in FireCommand)
+        {
+            fireCommands.Add(f.command);
+        }
+
+
         List<string> allKeywords = new List<string>(rightLeftMappings.Keys);
         allKeywords.AddRange(upDownMappings.Keys);
         allKeywords.AddRange(resetwords);
         allKeywords.AddRange(wordBad);
+        allKeywords.AddRange(readyCommands);
+        allKeywords.AddRange(fireCommands);
 
         if (keywordRecognizer != null)
         {
@@ -172,6 +216,39 @@ public class Bow : MonoBehaviour
             targetRotation = Quaternion.identity;
             ShowSubtitles(Say);
         }
+        else if (readyCommands.Contains(Say))
+        {
+            isPulling = true;
+            if (currentArrow == null)
+            {
+                currentArrow = Instantiate(arrowPrefabs, point.position, point.rotation);
+                currentArrow.transform.SetParent(transform); // menjadikan Bow sebagai parent
+            }
+            ShowSubtitles(Say);
+        }
+        else if (fireCommands.Contains(Say))
+        {
+            if (currentArrow != null)
+            {
+                // Tambahkan force ke arrow agar "tertembak"
+                Rigidbody rb = currentArrow.GetComponent<Rigidbody>();
+                float pullAmount = Vector3.Distance(currentMiddlePos, defaultMiddlePos) / maxPullDistance;
+                pullAmount = Mathf.Clamp01(pullAmount);
+
+                Arrow arrow = currentArrow.GetComponent<Arrow>();
+                if (arrow != null)
+                {
+                    currentArrow.transform.SetParent(null);
+                    Vector3 force = point.forward * (pullAmount * forceMultiplier);
+                    arrow.Fire(force);
+                }
+
+                currentArrow = null; // clear reference supaya bisa spawn lagi
+            }
+            isPulling = false;
+            currentForce = 0f;
+            ShowSubtitles(Say);
+        }
         else
         {
             ShowSubtitles("Sorry, I Don't Understand, Please Try Again");
@@ -182,13 +259,52 @@ public class Bow : MonoBehaviour
     {
         targetObject.transform.rotation = Quaternion.Lerp(targetObject.transform.rotation, targetRotation, Time.deltaTime * rotationSpeed);
 
-        // Update posisi tengah tali
+        targetMiddlePos = isPulling ? pulledMiddlePos : defaultMiddlePos;
+
         currentMiddlePos = Vector3.Lerp(currentMiddlePos, targetMiddlePos, Time.deltaTime * pullSpeed);
         UpdateStringBow();
 
         if (Time.time - lastVoiceTime > 3f && !isFading)
         {
             StartCoroutine(FadeOutSubtitles());
+        }
+
+        Vector3 targetPointPos = isPulling ? pointPulledPos : pointDefaultPos;
+        point.localPosition = Vector3.Lerp(point.localPosition, targetPointPos, Time.deltaTime * pointPullSpeed);
+
+        if (currentArrow != null)
+        {
+            currentArrow.transform.position = Vector3.Lerp(currentArrow.transform.position, point.position, Time.deltaTime * pointPullSpeed);
+        }
+
+        if (currentArrow != null && isPulling)
+        {
+            float pullAmount = Vector3.Distance(currentMiddlePos, defaultMiddlePos) / maxPullDistance;
+            pullAmount = Mathf.Clamp01(pullAmount);
+            targetForce = pullAmount * forceMultiplier;
+
+            currentForce = Mathf.Lerp(currentForce, targetForce, Time.deltaTime * forceLerpSpeed);
+            Vector3 forceDirection = point.forward * currentForce;
+
+            SimulateTrajectory(currentArrow.transform.position, forceDirection);
+        }
+        else
+        {
+            currentForce = 0f;
+            trajectoryLine.positionCount = 0;
+        }
+    }
+    void SimulateTrajectory(Vector3 startPosition, Vector3 initialVelocity)
+    {
+        trajectoryLine.positionCount = trajectoryResolution;
+
+        Vector3 gravity = Physics.gravity;
+        float timestep = 0.1f;
+        for (int i = 0; i < trajectoryResolution; i++)
+        {
+            float t = i * timestep;
+            Vector3 point = startPosition + initialVelocity * t + 0.5f * gravity * t * t;
+            trajectoryLine.SetPosition(i, point);
         }
     }
 
