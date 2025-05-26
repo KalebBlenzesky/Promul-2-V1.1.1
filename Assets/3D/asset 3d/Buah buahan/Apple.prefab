@@ -99,7 +99,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   scoreValue: 10
   isTarget: 1
-  moveSpeed: 0.5
+  moveSpeed: 0.2
 --- !u!65 &4624826217817978628
 BoxCollider:
   m_ObjectHideFlags: 0

@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using TMPro;
 using System.Globalization;
 using Unity.IO.LowLevel.Unsafe;
+using UnityEngine.UI;
 
 public class Bow : MonoBehaviour
 {
@@ -19,7 +20,7 @@ public class Bow : MonoBehaviour
 
     private Vector3 defaultMiddlePos;
     private Vector3 pulledMiddlePos;
-    private bool isPulling = false;
+    public bool isPulling = false;
 
     [Header("Bow")]
     public GameObject arrowPrefabs;
@@ -70,6 +71,9 @@ public class Bow : MonoBehaviour
     public string Say;
     public float rotationSpeed = 2f;
     private Quaternion targetRotation;
+
+    [Header("UI")]
+    public Slider forceSlider;
 
     private float rotationX = 0f;
     private float rotationY = 0f;
@@ -222,7 +226,7 @@ public class Bow : MonoBehaviour
             if (currentArrow == null)
             {
                 currentArrow = Instantiate(arrowPrefabs, point.position, point.rotation);
-                currentArrow.transform.SetParent(transform); // menjadikan Bow sebagai parent
+                currentArrow.transform.SetParent(transform);
             }
             ShowSubtitles(Say);
         }
@@ -243,7 +247,7 @@ public class Bow : MonoBehaviour
                     arrow.Fire(force);
                 }
 
-                currentArrow = null; // clear reference supaya bisa spawn lagi
+                currentArrow = null;
             }
             isPulling = false;
             currentForce = 0f;
@@ -292,6 +296,11 @@ public class Bow : MonoBehaviour
         {
             currentForce = 0f;
             trajectoryLine.positionCount = 0;
+        }
+
+        if (forceSlider != null)
+        {
+            forceSlider.value = currentForce;
         }
     }
     void SimulateTrajectory(Vector3 startPosition, Vector3 initialVelocity)
