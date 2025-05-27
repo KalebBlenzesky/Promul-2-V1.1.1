@@ -84,6 +84,12 @@ public class Bow : MonoBehaviour
     private float lastVoiceTime;
     private bool isFading = false;
 
+    [Header ("Audio")]
+    public List<AudioClip> readyAudioClips;
+    public List<AudioClip> fireAudioClips;
+    public AudioSource audioSource;
+
+
     void Start()
     {
         Subtitles.text = "";
@@ -130,7 +136,8 @@ public class Bow : MonoBehaviour
             Debug.Log("Microphone switched to: " + selectedMicrophone);
         }
     }
-
+    // ---= Recognition Commands =---
+    // ---= Do not Change THis =---
     void InitializeVoiceRecognition()
     {
         rightLeftMappings.Clear();
@@ -184,6 +191,7 @@ public class Bow : MonoBehaviour
         targetRotation = targetObject.transform.rotation;
     }
 
+    // ---= Strings Thing =---
     void UpdateStringBow()
     {
         if (stringbow != null)
@@ -193,6 +201,8 @@ public class Bow : MonoBehaviour
         }
     }
 
+    // ---= Voice Commands =---
+    // ---= You Can Change This =---
     private void OnKeywordRecognized(PhraseRecognizedEventArgs args)
     {
         Say = args.text;
@@ -220,21 +230,25 @@ public class Bow : MonoBehaviour
             targetRotation = Quaternion.identity;
             ShowSubtitles(Say);
         }
+        // ---= Ready Commands =---
         else if (readyCommands.Contains(Say))
         {
             isPulling = true;
+
             if (currentArrow == null)
             {
                 currentArrow = Instantiate(arrowPrefabs, point.position, point.rotation);
                 currentArrow.transform.SetParent(transform);
             }
+
+            PlayRandomAudio(readyAudioClips);
             ShowSubtitles(Say);
         }
+        // ---= Fire Commands =---
         else if (fireCommands.Contains(Say))
         {
             if (currentArrow != null)
             {
-                // Tambahkan force ke arrow agar "tertembak"
                 Rigidbody rb = currentArrow.GetComponent<Rigidbody>();
                 float pullAmount = Vector3.Distance(currentMiddlePos, defaultMiddlePos) / maxPullDistance;
                 pullAmount = Mathf.Clamp01(pullAmount);
@@ -249,8 +263,11 @@ public class Bow : MonoBehaviour
 
                 currentArrow = null;
             }
+
             isPulling = false;
             currentForce = 0f;
+
+            PlayRandomAudio(fireAudioClips);
             ShowSubtitles(Say);
         }
         else
@@ -363,5 +380,13 @@ public class Bow : MonoBehaviour
     public string[] GetAvailableMicrophones()
     {
         return Microphone.devices;
+    }
+
+    private void PlayRandomAudio(List<AudioClip> clips)
+    {
+        if (clips == null || clips.Count == 0 || audioSource == null) return;
+
+        int index = UnityEngine.Random.Range(0, clips.Count);
+        audioSource.PlayOneShot(clips[index]);
     }
 }
