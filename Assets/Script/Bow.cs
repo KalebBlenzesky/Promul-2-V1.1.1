@@ -6,6 +6,7 @@ using TMPro;
 using System.Globalization;
 using Unity.IO.LowLevel.Unsafe;
 using UnityEngine.UI;
+using UnityEngine.Events;
 
 public class Bow : MonoBehaviour
 {
@@ -53,6 +54,10 @@ public class Bow : MonoBehaviour
     [SerializeField]
     private List<Ready> ReadyCommand = new List<Ready>();
     private HashSet<string> readyCommands = new HashSet<string>();
+
+    [Header("Ready and Fire Events")]
+    public UnityEvent ReadyEvents;
+    public UnityEvent FireEvents;
 
     [SerializeField]
     private List<Fire> FireCommand = new List<Fire>();
@@ -234,7 +239,7 @@ public class Bow : MonoBehaviour
         else if (readyCommands.Contains(Say))
         {
             isPulling = true;
-
+            ReadyEvents?.Invoke();
             if (currentArrow == null)
             {
                 currentArrow = Instantiate(arrowPrefabs, point.position, point.rotation);
@@ -249,6 +254,7 @@ public class Bow : MonoBehaviour
         {
             if (currentArrow != null)
             {
+                FireEvents?.Invoke();
                 Rigidbody rb = currentArrow.GetComponent<Rigidbody>();
                 float pullAmount = Vector3.Distance(currentMiddlePos, defaultMiddlePos) / maxPullDistance;
                 pullAmount = Mathf.Clamp01(pullAmount);
